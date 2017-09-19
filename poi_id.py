@@ -19,7 +19,8 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.model_selection import train_test_split
-from sklearn import naive_bayes
+from sklearn.ensemble import AdaBoostClassifier
+from tester import test_classifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from numpy import mean
 
@@ -125,12 +126,20 @@ print top_5
 selected_features = ["poi"] + map(lambda x: x[0], top_5)
 data = featureFormat(my_dataset, selected_features, sort_keys=True)
 labels, features = targetFeatureSplit(data)
+
 """
-Try a variety of classifiers
+Task 4: Try a variety of classifiers
 # Please name your classifier clf for easy export below.
 # Note that if you want to do PCA or other multi-stage operations,
 # you'll need to use Pipelines. For more info:
 # http://scikit-learn.org/stable/modules/pipeline.html
+
+Task 5: Tune your classifier to achieve better than .3 precision and recall
+using our testing script. Check the tester.py script in the final project
+folder for details on the evaluation method, especially the test_classifier
+function. Because of the small size of the dataset, the script uses
+stratified shuffle split cross validation. For more info:
+http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
 """
 
 
@@ -138,50 +147,52 @@ def tune_params(clf, param):
     features_train, features_test, labels_train, labels_test = train_test_split(features, labels, test_size=0.3,
                                                                                 random_state=60)
     sss = StratifiedShuffleSplit(100, test_size=0.3, random_state=60)
-    gs = GridSearchCV(clf, param, n_jobs=-1, cv=sss, scoring='f1')
+    gs = GridSearchCV(clf, param, cv=sss, scoring='f1')
     gs.fit(features, labels)
-    prediction = gs.predict(features_test)
+    clf = gs.best_estimator_
+    clf.fit(features_train, labels_train)
+    prediction = clf.predict(features_test)
     print 'Precision:', precision_score(labels_test, prediction)
     print 'Recall:', recall_score(labels_test, prediction)
     print 'F1 Score:', f1_score(labels_test, prediction)
+
+    # getting score based on Udacity's tester.py
+    test_classifier(clf, my_dataset, selected_features)
+
+
+# trying Naive Bayes
+pca = PCA()
+nb_clf = GaussianNB()
+pipeline = Pipeline([("PCA", pca), ("NaiveBayesClassifier", nb_clf)])
+parameters = {}
+print "\nGetting results for Naive Bayes"
+print "-------------------------------"
+tune_params(pipeline, parameters)
 
 # trying Decision Tress
 pca = PCA()
 dt_clf = DecisionTreeClassifier()
 pipeline = Pipeline([("PCA", pca), ("DecisionTreeClassifier", dt_clf)])
-parameters = {"PCA__n_components": range(4, 7), "PCA__whiten": [True, False],
-              "DecisionTreeClassifier__min_samples_leaf": [2, 6, 10, 12],
-              "DecisionTreeClassifier__min_samples_split": [2, 6, 10, 12],
-              "DecisionTreeClassifier__criterion": ["entropy", "gini"],
-              "DecisionTreeClassifier__max_depth": [None, 5],
-              "DecisionTreeClassifier__random_state": [42, 46, 60]}
+parameters = {
+    "DecisionTreeClassifier__min_samples_leaf": [2, 6, 10],
+    "DecisionTreeClassifier__min_samples_split": [2, 10, 20],
+    "DecisionTreeClassifier__criterion": ["entropy", "gini"],
+    "DecisionTreeClassifier__max_leaf_nodes": [5, 10, 20]
+}
+print "\nGetting results for Decision Trees"
+print "----------------------------------"
+tune_params(pipeline, parameters)
+
+# trying Ada Boost
+ab_clf = AdaBoostClassifier()
+pipeline = Pipeline([("PCA", pca), ("AdaBoostClassifier", ab_clf)])
+parameters = {'AdaBoostClassifier__n_estimators': [10, 100, 150],
+              'AdaBoostClassifier__algorithm': ['SAMME', 'SAMME.R']}
+print "\nGetting results for Ada Boost"
+print "-----------------------------"
 tune_params(pipeline, parameters)
 
 """
-features_train, features_test, labels_train, labels_test = train_test_split(features, labels, test_size=0.3,
-                                                                            random_state=60)
-svc = SVC()
-pca = PCA()
-pipeline = Pipeline([('pca', pca), ('svc', svc)])
-parameters = {'svc__kernel': ['rbf'], 'svc__C': [1, 10], "pca__n_components": range(2, 6)}
-sss = StratifiedShuffleSplit(100, test_size=0.3, random_state=60)
-gs = GridSearchCV(pipeline, parameters, n_jobs=-1, cv=sss, scoring='f1')
-gs.fit(features_train, labels_train)
-clf = gs.best_estimator_
-print clf
-prediction = clf.predict(features_test)
-print prediction
-
-# Task 5: Tune your classifier to achieve better than .3 precision and recall
-# using our testing script. Check the tester.py script in the final project
-# folder for details on the evaluation method, especially the test_classifier
-# function. Because of the small size of the dataset, the script uses
-# stratified shuffle split cross validation. For more info:
-# http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
-
-# Example starting point. Try investigating other evaluation techniques!
-
-
 # Task 6: Dump your classifier, dataset, and features_list so anyone can
 # check your results. You do not need to change anything below, but make sure
 # that the version of poi_id.py that you submit can be run on its own and
