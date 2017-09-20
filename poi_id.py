@@ -9,6 +9,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from functions import *
 from tabulate import tabulate
+from sklearn.linear_model import LogisticRegression
 import numpy as np
 import matplotlib as plt
 from sklearn.pipeline import Pipeline
@@ -122,7 +123,9 @@ labels, features = targetFeatureSplit(data)
 # Generating top 5 features
 selector = SelectKBest(f_classif, k=5)
 top_5 = sorted(zip(selected_features[1:], selector.fit(features, labels).scores_), key=lambda x: x[1], reverse=True)[:5]
-print top_5
+temp = pd.DataFrame.from_records(top_5)
+temp.columns = ["features", "score ^"]
+print "\n" + tabulate(temp, headers='keys', tablefmt='pipe') + "\n"
 selected_features = ["poi"] + map(lambda x: x[0], top_5)
 data = featureFormat(my_dataset, selected_features, sort_keys=True)
 labels, features = targetFeatureSplit(data)
@@ -144,55 +147,57 @@ http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.Strati
 
 
 def tune_params(clf, param):
-    features_train, features_test, labels_train, labels_test = train_test_split(features, labels, test_size=0.3,
-                                                                                random_state=60)
     sss = StratifiedShuffleSplit(100, test_size=0.3, random_state=60)
     gs = GridSearchCV(clf, param, cv=sss, scoring='f1')
     gs.fit(features, labels)
     clf = gs.best_estimator_
-    clf.fit(features_train, labels_train)
-    prediction = clf.predict(features_test)
-    print 'Precision:', precision_score(labels_test, prediction)
-    print 'Recall:', recall_score(labels_test, prediction)
-    print 'F1 Score:', f1_score(labels_test, prediction)
 
     # getting score based on Udacity's tester.py
     test_classifier(clf, my_dataset, selected_features)
 
 
+"""
 # trying Naive Bayes
 pca = PCA()
-nb_clf = GaussianNB()
+nb_clf = GaussianNB(priors=[0.3, 0.7])
 pipeline = Pipeline([("PCA", pca), ("NaiveBayesClassifier", nb_clf)])
-parameters = {}
+parameters = {"PCA__n_components": [4]}
 print "\nGetting results for Naive Bayes"
 print "-------------------------------"
 tune_params(pipeline, parameters)
+
 
 # trying Decision Tress
 pca = PCA()
 dt_clf = DecisionTreeClassifier()
 pipeline = Pipeline([("PCA", pca), ("DecisionTreeClassifier", dt_clf)])
-parameters = {
-    "DecisionTreeClassifier__min_samples_leaf": [2, 6, 10],
-    "DecisionTreeClassifier__min_samples_split": [2, 10, 20],
-    "DecisionTreeClassifier__criterion": ["entropy", "gini"],
-    "DecisionTreeClassifier__max_leaf_nodes": [5, 10, 20]
-}
+parameters = {"DecisionTreeClassifier__min_samples_leaf": range(2, 12, 3),
+              "DecisionTreeClassifier__min_samples_split": range(2, 12, 3),
+              "DecisionTreeClassifier__criterion": ["entropy", "gini"],
+              "DecisionTreeClassifier__max_leaf_nodes": range(5, 20, 5),
+              "PCA__n_components": [None]
+              }
 print "\nGetting results for Decision Trees"
 print "----------------------------------"
 tune_params(pipeline, parameters)
-
-# trying Ada Boost
-ab_clf = AdaBoostClassifier()
-pipeline = Pipeline([("PCA", pca), ("AdaBoostClassifier", ab_clf)])
-parameters = {'AdaBoostClassifier__n_estimators': [10, 100, 150],
-              'AdaBoostClassifier__algorithm': ['SAMME', 'SAMME.R']}
-print "\nGetting results for Ada Boost"
-print "-----------------------------"
-tune_params(pipeline, parameters)
-
+# Accuracy: 0.85113	Precision: 0.42687	Recall: 0.34000	F1: 0.37851	F2: 0.35443
 """
+# trying Logistic Regression
+pca = PCA()
+lr_clf = LogisticRegression()
+pipeline = Pipeline([("PCA", pca), ("LogisticRegression", lr_clf)])
+parameters = {'LogisticRegression__C': [1e-08, 1e-07, 1e-06, 1e-03, 1e-02],
+              'LogisticRegression__tol': [0.01, 0.001],
+              'LogisticRegression__penalty': ['l1', 'l2'],
+              'LogisticRegression__class_weight': ['balanced'],
+              'LogisticRegression__solver': ['liblinear'],
+              "PCA__n_components": [3]
+              }
+print "\nGetting results for Logistic Regression"
+print "----------------------------------------"
+tune_params(pipeline, parameters)
+"""
+
 # Task 6: Dump your classifier, dataset, and features_list so anyone can
 # check your results. You do not need to change anything below, but make sure
 # that the version of poi_id.py that you submit can be run on its own and
